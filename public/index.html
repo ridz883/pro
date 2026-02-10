@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -9,30 +10,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: sans-serif; background-color: #0f172a; color: white; }
-        .tab-btn.active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
         .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center p-4">
 
-    <header class="w-full max-w-2xl mt-8 mb-8 text-center">
-        <h1 class="text-3xl font-bold text-blue-400">All Ridzkey</h1>
-        <p class="text-slate-400 text-xs mt-2">All-in-One Downloader (Stable Version)</p>
+    <header class="w-full max-w-2xl mt-8 mb-6 text-center">
+        <h1 class="text-3xl font-bold text-blue-400">All Ridzkey Downloader</h1>
+        <p class="text-slate-400 text-xs mt-2">TikTok • Instagram • YouTube • Facebook • Spotify</p>
     </header>
 
     <main class="w-full max-w-2xl bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
         <div class="p-6">
-            <div class="relative">
-                <input type="text" id="urlInput" placeholder="Tempel link video di sini..." 
-                    class="w-full bg-slate-900 border border-slate-600 px-5 py-4 rounded-xl focus:outline-none focus:border-blue-500 text-sm">
-            </div>
+            <input type="text" id="urlInput" placeholder="Tempel link (TikTok, IG, YT, FB, dsb)..." 
+                class="w-full bg-slate-900 border border-slate-600 px-5 py-4 rounded-xl focus:outline-none focus:border-blue-500 text-sm mb-4">
 
-            <button onclick="startDownload()" id="btnDl" class="w-full mt-4 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold flex justify-center items-center gap-2">
+            <button onclick="processDl()" id="btnDl" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all">
                 <span>Download Sekarang</span>
             </button>
-
-            <div id="msg" class="hidden mt-4 p-3 bg-red-500/10 text-red-400 rounded-lg text-xs text-center"></div>
+            <div id="errorMsg" class="hidden mt-4 p-3 bg-red-500/10 text-red-400 rounded-lg text-xs text-center"></div>
         </div>
     </main>
 
@@ -41,67 +39,82 @@
     </section>
 
     <script>
-        const API_PATH = '/download'; 
-
-        async function startDownload() {
+        async function processDl() {
             const input = document.getElementById('urlInput');
             const btn = document.getElementById('btnDl');
-            const msg = document.getElementById('msg');
             const resSec = document.getElementById('resSection');
+            const error = document.getElementById('errorMsg');
             
             if(!input.value) return;
             
-            msg.classList.add('hidden');
+            error.classList.add('hidden');
             resSec.classList.add('hidden');
             btn.disabled = true;
             btn.innerHTML = `<div class="loader"></div>`;
 
             try {
-                const r = await fetch(`${API_PATH}?url=${encodeURIComponent(input.value)}`);
-                const json = await r.json();
-                render(json);
+                const r = await fetch(`/download?url=${encodeURIComponent(input.value)}`);
+                const res = await r.json();
+                
+                if(!res.status) throw new Error(res.message);
+                renderResult(res.data);
             } catch (e) {
-                msg.innerText = "Server sibuk, coba lagi nanti.";
-                msg.classList.remove('hidden');
+                error.innerText = e.message || "Gagal memproses link.";
+                error.classList.remove('hidden');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = `<span>Download Sekarang</span>`;
             }
         }
 
-        function render(res) {
+        function renderResult(d) {
             const content = document.getElementById('resContent');
             document.getElementById('resSection').classList.remove('hidden');
-            
-            // --- AUTO SCANNER LOGIC (Mencari link sampai ketemu) ---
-            let d = res.data || res.result || res; 
-            let video = d.video || d.url || d.link || (d.metadata ? d.metadata.video : null) || (d.urls ? d.urls[0] : null);
-            let thumb = d.thumbnail || d.cover || d.image || (d.metadata ? d.metadata.thumbnail : '');
-            let title = d.title || d.caption || 'Video Berhasil Ditemukan';
 
-            // Jika masih tidak ketemu, coba scan isi object d secara brutal
-            if(!video) {
-                for (let key in d) {
-                    if (typeof d[key] === 'string' && d[key].startsWith('http') && (d[key].includes('mp4') || d[key].includes('googlevideo'))) {
-                        video = d[key];
-                        break;
-                    }
-                }
-            }
+            // --- UNIVERSAL EXTRACTOR ---
+            let title = d.title || d.caption || d.desc || "Media Berhasil Ditemukan";
+            let thumb = d.thumbnail || d.cover || d.image || d.preview || '';
+            
+            // Cari link video/media di semua kemungkinan key
+            let video = d.video || d.url || d.link || (d.urls ? d.urls[0] : null);
+            let audio = d.audio || d.music || d.mp3;
+
+            // Jika formatnya array (Instagram Carousel / TikTok Images)
+            let extraMedia = (d.media && Array.isArray(d.media)) ? d.media : [];
 
             let html = `<div class="flex flex-col gap-4">`;
-            if(thumb) html += `<img src="${thumb}" class="w-full rounded-lg">`;
-            html += `<p class="text-sm font-bold">${title}</p>`;
             
-            if(video) {
-                html += `<a href="${video}" target="_blank" class="block w-full bg-green-600 text-center py-4 rounded-xl font-bold">KLIK UNTUK DOWNLOAD MP4</a>`;
-            } else {
-                html += `<p class="text-yellow-500 text-xs">Link MP4 tidak ditemukan dalam data API. Coba ganti URL.</p>`;
+            // 1. Preview Video jika ada
+            if(video && !Array.isArray(video)) {
+                html += `<video src="${video}" controls class="w-full rounded-lg bg-black"></video>`;
+            } else if(thumb) {
+                html += `<img src="${thumb}" class="w-full rounded-lg">`;
             }
-            
+
+            html += `<p class="text-sm font-bold text-blue-300 uppercase tracking-widest text-[10px]">Judul:</p>`;
+            html += `<p class="text-sm -mt-2">${title}</p>`;
+
+            // 2. Tombol Utama (Video)
+            if(video && typeof video === 'string') {
+                html += createBtn(video, "DOWNLOAD VIDEO (MP4)", "bg-green-600");
+            }
+
+            // 3. Tombol Audio (MP3)
+            if(audio) {
+                html += createBtn(audio, "DOWNLOAD AUDIO (MP3)", "bg-purple-600");
+            }
+
+            // 4. Jika ada banyak media (Instagram Slide)
+            extraMedia.forEach((m, i) => {
+                const link = m.url || m;
+                const type = (link.includes('.jpg') || link.includes('.png')) ? 'GAMBAR' : 'VIDEO';
+                html += createBtn(link, `DOWNLOAD ${type} ${i+1}`, "bg-slate-700");
+            });
+
             html += `</div>`;
             content.innerHTML = html;
         }
-    </script>
-</body>
-</html>
+
+        function createBtn(url, text, color) {
+            return `<a href="${url}" target="_blank" class="block w-full ${color} text-center py-4 rounded-xl font-bold text-sm shadow-lg transform active:scale-95 transition-all mb-2 underline decoration-transparent">${text}</a>`;
+        !D
