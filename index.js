@@ -1,49 +1,55 @@
-function renderResult(data) {
-    const container = document.getElementById('resultSection');
-    const content = document.getElementById('resultContent');
-    container.classList.remove('hidden');
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
 
-    // Ambil data utama dari response API Deline
-    const result = data.data || data; 
-    let html = '';
-    
-    // 1. Tampilkan Thumbnail jika ada
-    const thumb = result.thumbnail || result.cover || result.image || (result.metadata ? result.metadata.thumbnail : null);
-    if(thumb) {
-        html += `<img src="${thumb}" class="w-full md:w-48 rounded-lg object-cover shadow-md mb-4 md:mb-0">`;
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+
+// URL API Cadangan jika Deline down
+const API_PRIMARY = 'https://api.deline.web.id/downloader/aio?url=';
+const API_BACKUP = 'https://api.tiklydown.eu.org/api/download?url='; 
+
+app.get('/download', async (req, res) => {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ status: false, message: 'URL diperlukan' });
+
+    try {
+        // ENGINE 1: API DELINE
+        const response = await axios.get(`${API_PRIMARY}${encodeURIComponent(url)}`, { timeout: 5000 });
+        if (response.data && response.data.status !== false) {
+            return res.json(response.data);
+        }
+        throw new Error("Deline Down");
+    } catch (err) {
+        console.log("Switching to Backup Engine...");
+        try {
+            // ENGINE 2: API CADANGAN (Tiklydown untuk TikTok)
+            if (url.includes('tiktok.com')) {
+                const backup = await axios.get(`${API_BACKUP}${encodeURIComponent(url)}`);
+                // Format ulang agar sesuai dengan yang diharapkan Frontend
+                return res.json({
+                    status: true,
+                    data: {
+                        title: backup.data.data.title || "TikTok Video",
+                        thumbnail: backup.data.data.cover,
+                        video: backup.data.data.video.no_watermark,
+                        audio: backup.data.data.music.play_url
+                    }
+                });
+            }
+            throw new Error("No Backup Available");
+        } catch (finalErr) {
+            // KIRIM JSON, BUKAN TEKS (Agar tidak muncul error 'Unexpected token A')
+            res.status(200).json({ 
+                status: false, 
+                message: "Server sedang sibuk, silakan coba beberapa saat lagi." 
+            });
+        }
     }
+});
 
-    html += `<div class="flex-1 w-full text-sm">`;
-    
-    // 2. Tampilkan Judul
-    const title = result.title || result.caption || 'Berhasil Menemukan File';
-    html += `<h4 class="font-bold text-lg mb-2 line-clamp-2">${title}</h4>`;
-
-    // 3. Tombol Download Otomatis (Mencari link MP4/MP3)
-    // Mencari di berbagai kemungkinan key: url, video, mp4, link
-    const downloadUrl = result.url || result.video || result.link || (result.metadata ? result.metadata.video : null);
-    
-    if (downloadUrl) {
-        html += createDownloadButton(downloadUrl, "Download Video (MP4)");
-    } 
-
-    // Jika ada audio/music
-    const audioUrl = result.audio || result.music || (result.metadata ? result.metadata.audio : null);
-    if (audioUrl) {
-        html += createDownloadButton(audioUrl, "Download Audio (MP3)");
-    }
-
-    // Backup: Jika API memberikan array media (seperti Instagram Carousel)
-    if (result.media && Array.isArray(result.media)) {
-        result.media.forEach((item, i) => {
-            html += createDownloadButton(item.url || item, `Download Media ${i+1}`);
-        });
-    }
-
-    if (!downloadUrl && !audioUrl && !result.media) {
-        html += `<p class="text-yellow-400">Gagal mengekstrak link download. Coba tempel ulang URL-nya.</p>`;
-    }
-
-    html += `</div>`;
-    content.innerHTML = html;
-}
+app.get('/', (req, res) => res.send('Engine Ready!'));
+app.listen(PORT);
