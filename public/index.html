@@ -3,109 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Ridzkey Downloader v3</title>
+    <title>All Ridzkey Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { background: #0f172a; color: white; font-family: sans-serif; }
-        .progress-bar { height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; display: none; }
-        #fill { width: 0%; height: 100%; background: #3b82f6; transition: width 0.5s; }
-    </style>
 </head>
-<body class="flex flex-col items-center p-6">
-
-    <div class="w-full max-w-md bg-slate-800 p-6 rounded-3xl shadow-2xl border border-slate-700 mt-10">
-        <h1 class="text-2xl font-black text-center text-blue-500 mb-6">RIDZKEY HYPER-FAST</h1>
+<body class="bg-slate-900 text-white p-6">
+    <div class="max-w-md mx-auto bg-slate-800 p-6 rounded-3xl shadow-2xl border border-slate-700 mt-10">
+        <h1 class="text-xl font-bold text-center text-blue-400 mb-6">ALL RIDZKEY PRO</h1>
+        <input type="text" id="urlInput" placeholder="Tempel link video..." class="w-full p-4 bg-slate-900 border border-slate-700 rounded-2xl mb-4 outline-none">
+        <button onclick="downloadStart()" id="btn" class="w-full bg-blue-600 py-4 rounded-2xl font-bold active:scale-95 transition-all">UNDUH VIDEO</button>
         
-        <input type="text" id="urlInput" placeholder="Tempel link (TikTok, IG, YT, FB)..." 
-            class="w-full p-4 bg-slate-900 border border-slate-700 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-
-        <button onclick="startProcess()" id="mainBtn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">
-            DAPATKAN VIDEO
-        </button>
-
-        <div class="progress-bar mt-6" id="pBar">
-            <div id="fill"></div>
+        <div id="pContainer" class="hidden mt-6">
+            <div class="flex justify-between text-[10px] mb-1">
+                <span id="pStatus">Menyiapkan...</span>
+                <span id="pPercent">0%</span>
+            </div>
+            <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div id="pBar" class="bg-blue-500 h-full w-0 transition-all"></div>
+            </div>
         </div>
-        <p id="status" class="text-center text-[10px] text-slate-500 mt-2"></p>
-    </div>
-
-    <div id="result" class="w-full max-w-md mt-6 hidden bg-slate-800 p-4 rounded-3xl border border-slate-700">
-        <div id="preview" class="rounded-2xl overflow-hidden mb-4 bg-black"></div>
-        <div id="actions" class="space-y-3"></div>
     </div>
 
     <script>
-        async function startProcess() {
+        async function downloadStart() {
             const url = document.getElementById('urlInput').value;
-            const btn = document.getElementById('mainBtn');
+            const btn = document.getElementById('btn');
+            const pContainer = document.getElementById('pContainer');
             const pBar = document.getElementById('pBar');
-            const fill = document.getElementById('fill');
-            const status = document.getElementById('status');
-            const result = document.getElementById('result');
+            const pPercent = document.getElementById('pPercent');
+            const pStatus = document.getElementById('pStatus');
 
             if(!url) return;
-
-            // Reset UI
-            result.classList.add('hidden');
             btn.disabled = true;
-            pBar.style.display = 'block';
-            
-            // Simulasi Progress (User Experience)
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += Math.random() * 15;
-                if(progress > 90) clearInterval(interval);
-                fill.style.width = Math.min(progress, 90) + '%';
-                status.innerText = `Sedang menganalisis server... ${Math.floor(progress)}%`;
-            }, 300);
+            pContainer.classList.remove('hidden');
 
             try {
-                // Panggil API utama (Gunakan endpoint /download yang sebelumnya)
-                const r = await fetch(`/download?url=${encodeURIComponent(url)}`);
-                const json = await r.json();
+                // Step 1: Ambil Link Langsung
+                pStatus.innerText = "Menganalisis link...";
+                const res = await fetch(`/get-link?url=${encodeURIComponent(url)}`);
+                const data = await res.json();
+                if(!data.status) throw new Error(data.message);
+
+                // Step 2: Download di Sisi Client (Akurat 100%)
+                pStatus.innerText = "Mengunduh file...";
+                const mediaResponse = await fetch(data.downloadUrl);
+                const reader = mediaResponse.body.getReader();
+                const contentLength = +mediaResponse.headers.get('Content-Length');
                 
-                clearInterval(interval);
-                fill.style.width = '100%';
-                status.innerText = "Selesai!";
+                let receivedLength = 0;
+                let chunks = [];
+                
+                while(true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    receivedLength += value.length;
+                    
+                    if(contentLength) {
+                        const step = Math.round((receivedLength / contentLength) * 100);
+                        pBar.style.width = step + '%';
+                        pPercent.innerText = step + '%';
+                    }
+                }
 
-                setTimeout(() => {
-                    renderResult(json.data || json);
-                    btn.disabled = false;
-                    pBar.style.display = 'none';
-                    fill.style.width = '0%';
-                }, 500);
-
+                // Step 3: Simpan File
+                pStatus.innerText = "Menyimpan ke HP...";
+                const blob = new Blob(chunks);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${data.title}.mp4`;
+                a.click();
+                
+                pStatus.innerText = "Selesai!";
             } catch (e) {
-                clearInterval(interval);
-                status.innerText = "Gagal. Coba link lain.";
+                alert("Gagal: " + e.message);
+                pStatus.innerText = "Terjadi kesalahan.";
+            } finally {
                 btn.disabled = false;
             }
-        }
-
-        function renderResult(d) {
-            const result = document.getElementById('result');
-            const preview = document.getElementById('preview');
-            const actions = document.getElementById('actions');
-            result.classList.remove('hidden');
-
-            // Cari Link Video secara agresif
-            let video = d.video || d.url || d.link || (d.urls ? d.urls[0] : null);
-            if(!video && d.media) video = d.media[0].url || d.media[0];
-            
-            let thumb = d.thumbnail || d.cover || d.image || '';
-
-            preview.innerHTML = video ? `<video src="${video}" controls class="w-full"></video>` : `<img src="${thumb}" class="w-full">`;
-            
-            let html = `<p class="text-xs font-bold mb-2">${d.title || 'Video Berhasil Ditemukan'}</p>`;
-            
-            if(video) {
-                html += `<a href="${video}" target="_blank" class="block w-full bg-green-600 text-center py-4 rounded-xl font-bold text-sm shadow-lg">DOWNLOAD SEKARANG (MP4)</a>`;
-            } else {
-                html += `<p class="text-red-400 text-center text-xs">Link video tidak ditemukan. API sedang limit.</p>`;
-            }
-            
-            actions.innerHTML = html;
         }
     </script>
 </body>
