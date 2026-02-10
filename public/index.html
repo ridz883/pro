@@ -3,112 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="no-referrer">
-    <title>All Ridzkey Downloader</title>
+    <title>All Ridzkey Scraper</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; background: #0f172a; color: white; min-h: 100vh; }
-        .btn-grad { background: linear-gradient(to r, #2563eb, #3b82f6); }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .progress-container { width: 100%; background: #1e293b; border-radius: 10px; overflow: hidden; display: none; }
+        #progressBar { width: 0%; height: 20px; background: #3b82f6; transition: width 0.3s; }
     </style>
 </head>
-<body class="flex flex-col items-center p-4">
+<body class="bg-slate-900 text-white flex flex-col items-center p-6">
 
-    <header class="w-full max-w-xl mt-10 text-center">
-        <h1 class="text-4xl font-black text-blue-500 tracking-tighter">ALL RIDZKEY</h1>
-        <p class="text-slate-400 text-sm">Download TikTok, IG, YT, FB, Spotify</p>
-    </header>
+    <div class="w-full max-w-md bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 mt-10">
+        <h1 class="text-2xl font-bold mb-4 text-blue-400 text-center text-">All Ridzkey Scraper</h1>
+        
+        <input type="text" id="urlInput" placeholder="Tempel link video..." 
+            class="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl mb-4 outline-none focus:border-blue-500">
 
-    <main class="w-full max-w-xl bg-slate-800 mt-8 rounded-3xl p-6 shadow-2xl border border-slate-700">
-        <input type="text" id="urlInput" placeholder="Tempel link di sini..." 
-            class="w-full bg-slate-900 border border-slate-700 px-5 py-5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white mb-4">
-
-        <button onclick="doDownload()" id="btnAction" class="w-full btn-grad py-5 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all">
-            DOWNLOAD SEKARANG
+        <button onclick="downloadWithProgress()" id="dlBtn" 
+            class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold transition-all">
+            UNDUH SEKARANG
         </button>
-        <div id="errMsg" class="hidden mt-4 p-3 bg-red-500/20 text-red-400 rounded-xl text-center text-sm"></div>
-    </main>
 
-    <div id="resultArea" class="w-full max-w-xl mt-6 hidden">
-        <div class="bg-slate-800 rounded-3xl p-6 border border-slate-700 shadow-2xl">
-            <div id="mediaPreview" class="mb-4"></div>
-            <div id="downloadButtons" class="space-y-3"></div>
+        <div class="progress-container mt-6" id="pContainer">
+            <div class="flex justify-between text-xs mb-2">
+                <span>Mengunduh...</span>
+                <span id="pText">0%</span>
+            </div>
+            <div id="progressBar"></div>
         </div>
+        
+        <p id="status" class="text-center text-xs text-slate-400 mt-4"></p>
     </div>
 
     <script>
-        async function doDownload() {
-            const input = document.getElementById('urlInput');
-            const btn = document.getElementById('btnAction');
-            const resultArea = document.getElementById('resultArea');
-            const errMsg = document.getElementById('errMsg');
-            
-            if(!input.value) return;
+        async function downloadWithProgress() {
+            const url = document.getElementById('urlInput').value;
+            const btn = document.getElementById('dlBtn');
+            const pContainer = document.getElementById('pContainer');
+            const pBar = document.getElementById('progressBar');
+            const pText = document.getElementById('pText');
+            const status = document.getElementById('status');
 
-            errMsg.classList.add('hidden');
-            resultArea.classList.add('hidden');
+            if(!url) return;
+
+            // Reset UI
             btn.disabled = true;
-            btn.innerHTML = `<center><div class="loader"></div></center>`;
+            pContainer.style.display = 'block';
+            status.innerText = "Mencari link video (Scraping)...";
 
             try {
-                const response = await fetch(`/download?url=${encodeURIComponent(input.value)}`);
-                const res = await response.json();
+                // Gunakan XMLHttpRequest karena fetch standar tidak mendukung pelacakan progres download dengan mudah
+                const xhr = new XMLHttpRequest();
+                const downloadUrl = `/proxy-download?url=${encodeURIComponent(url)}`;
                 
-                if(!res.status && !res.url && !res.video) throw new Error("Gagal mengambil data video.");
-                
-                showResult(res.data || res);
+                xhr.open('GET', downloadUrl, true);
+                xhr.responseType = 'blob';
+
+                xhr.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percent = Math.round((event.loaded / event.total) * 100);
+                        pBar.style.width = percent + '%';
+                        pText.innerText = percent + '%';
+                        status.innerText = `Mengambil data dari server... (${Math.round(event.loaded/1024/1024)}MB)`;
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const blob = new Blob([xhr.response], { type: 'video/mp4' });
+                        const link = document.createElement('a');
+                        link.href = window.URL.createObjectURL(blob);
+                        link.download = 'Ridzkey_Video.mp4';
+                        link.click();
+                        status.innerText = "Unduhan Selesai!";
+                    } else {
+                        status.innerText = "Gagal mengunduh. Server sibuk.";
+                    }
+                    btn.disabled = false;
+                };
+
+                xhr.onerror = () => {
+                    status.innerText = "Terjadi kesalahan jaringan.";
+                    btn.disabled = false;
+                };
+
+                xhr.send();
+
             } catch (e) {
-                errMsg.innerText = "Error: Server sibuk, coba link lain.";
-                errMsg.classList.remove('hidden');
-            } finally {
+                status.innerText = "Error: " + e.message;
                 btn.disabled = false;
-                btn.innerHTML = "DOWNLOAD SEKARANG";
             }
-        }
-
-        function showResult(d) {
-            const preview = document.getElementById('mediaPreview');
-            const buttons = document.getElementById('downloadButtons');
-            document.getElementById('resultArea').classList.remove('hidden');
-
-            // Ekstrak data
-            let title = d.title || d.caption || "Video Berhasil Diproses";
-            let thumb = d.thumbnail || d.cover || d.image || '';
-            let video = d.video || d.url || (d.urls ? d.urls[0] : null);
-            let audio = d.audio || d.music || d.mp3;
-
-            // Preview
-            preview.innerHTML = `
-                <div class="rounded-2xl overflow-hidden bg-black shadow-inner">
-                    ${video ? `<video src="${video}" controls class="w-full max-h-96"></video>` : `<img src="${thumb}" class="w-full">`}
-                </div>
-                <p class="mt-4 font-bold text-slate-200 line-clamp-2">${title}</p>
-            `;
-
-            // Tombol Download
-            let btnHtml = '';
-            if(video) btnHtml += createDlBtn(video, "DOWNLOAD VIDEO (MP4)", "bg-green-600");
-            if(audio) btnHtml += createDlBtn(audio, "DOWNLOAD AUDIO (MP3)", "bg-blue-600");
-            
-            // Handle Instagram Carousel/Multiple Images
-            if(d.media && Array.isArray(d.media)) {
-                d.media.forEach((m, i) => {
-                    const link = m.url || m;
-                    btnHtml += createDlBtn(link, `DOWNLOAD MEDIA ${i+1}`, "bg-slate-700");
-                });
-            }
-
-            buttons.innerHTML = btnHtml;
-        }
-
-        function createDlBtn(url, text, color) {
-            // Kita gunakan proxy download jika memungkinkan, atau minimal open in new tab
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer" 
-                class="block w-full ${color} text-center py-4 rounded-2xl font-black text-sm shadow-xl hover:opacity-90 transition-all">
-                ${text}
-            </a>`;
         }
     </script>
 </body>
