@@ -1,24 +1,45 @@
+// server.js
 const express = require('express');
-const cors = require('cors');
 const axios = require('axios');
 const app = express();
-app.use(cors());
 
-const API_AIO = 'https://api.deline.web.id/downloader/aio?url=';
+app.use(express.json());
+app.use(express.static('public'));
 
-app.get('/get-link', async (req, res) => {
+const DELINE_API = "https://api.deline.web.id/downloader/aio?url=";
+
+// Mock function untuk Scraping Fallback
+async function scrapingFallback(url) {
+    // Di sini kamu masukkan logika scraping (Puppeteer/Cheerio)
+    // Sesuai kebutuhan platform masing-masing
+    throw new Error("Scraping engine sedang maintenance."); 
+}
+
+app.post('/api/download', async (req, res) => {
+    const { url } = req.body;
+    
+    // 1. Coba API Utama (Deline)
     try {
-        const response = await axios.get(`${API_AIO}${encodeURIComponent(req.query.url)}`, { timeout: 8000 });
-        const d = response.data.data || response.data;
-        const finalUrl = d.video || d.url || d.link || (d.media ? d.media[0].url : null);
-        
-        if (finalUrl) {
-            return res.json({ status: true, downloadUrl: finalUrl, title: d.title || "Ridzkey Video" });
+        const response = await axios.get(`${DELINE_API}${encodeURIComponent(url)}`, { timeout: 3000 });
+        if (response.data && response.data.status) {
+            return res.json({ success: true, source: 'API', data: response.data });
         }
-        res.json({ status: false, message: "Link video tidak ditemukan." });
-    } catch (e) {
-        res.json({ status: false, message: "Server API sedang sibuk." });
+        throw new Error("API Invalid Response");
+    } catch (err) {
+        console.log("API Gagal, beralih ke Scraping...");
+        
+        // 2. Fallback ke Scraping Engine
+        try {
+            const scrapData = await scrapingFallback(url);
+            return res.json({ success: true, source: 'Scraping', data: scrapData });
+        } catch (scrapErr) {
+            // 3. Final Error Handling
+            return res.status(500).json({ 
+                success: false, 
+                message: "Server sedang sibuk, silakan coba kembali." 
+            });
+        }
     }
 });
 
-app.listen(3000);
+app.listen(3000, () => console.log('Ridzkey Downloader running on port 3000'));
