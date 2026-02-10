@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Ridzkey Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-white min-h-screen font-sans">
+
+    <nav class="p-6 bg-slate-800 border-b border-slate-700 shadow-xl">
+        <div class="container mx-auto text-center">
+            <h1 class="text-3xl font-black text-blue-500 tracking-tighter">RIDZKEY <span class="text-white">DL</span></h1>
+            <p class="text-xs text-slate-400 mt-1">TikTok • Instagram • Spotify • YouTube</p>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-12">
+        <div class="max-w-xl mx-auto bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700">
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2 text-slate-300">Tempel Link Media Disini:</label>
+                <input type="text" id="urlInput" placeholder="https://www.instagram.com/p/..." 
+                    class="w-full p-4 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+            </div>
+
+            <button onclick="downloadMedia()" id="btnDl" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-lg shadow-blue-900/40">
+                <i class="fa-solid fa-cloud-arrow-down mr-2"></i> DOWNLOAD SEKARANG
+            </button>
+
+            <div id="loading" class="hidden mt-6 text-center text-blue-400 animate-pulse">
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i> Sedang memproses link...
+            </div>
+
+            <div id="result" class="hidden mt-8 space-y-4">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        async function downloadMedia() {
+            const urlInput = document.getElementById('urlInput').value;
+            const btnDl = document.getElementById('btnDl');
+            const loading = document.getElementById('loading');
+            const resultDiv = document.getElementById('result');
+
+            if (!urlInput) return alert("Masukkan link dulu!");
+
+            // Reset tampilan
+            loading.classList.remove('hidden');
+            resultDiv.classList.add('hidden');
+            btnDl.disabled = true;
+
+            try {
+                // LANGSUNG TEMBAK API TANPA BACKEND SENDIRI
+                const response = await fetch(`https://api.deline.web.id/downloader/aio?url=${encodeURIComponent(urlInput)}`);
+                const data = await response.json();
+
+                if (data && data.status) {
+                    let content = `<div class="p-4 bg-slate-900 rounded-2xl border border-blue-500/30">`;
+                    content += `<p class="text-xs text-blue-400 font-bold mb-3 uppercase tracking-widest">Media Ditemukan!</p>`;
+                    
+                    const res = data.result;
+
+                    // Support Video (TikTok/IG/YT)
+                    if (res.url || res.mp4) {
+                        content += `<a href="${res.url || res.mp4}" target="_blank" class="block w-full bg-blue-600 text-center py-3 rounded-lg font-bold mb-2 hover:bg-blue-500 transition">UNDUH VIDEO (MP4)</a>`;
+                    }
+
+                    // Support Audio (Spotify/TikTok MP3)
+                    if (res.mp3 || res.audio) {
+                        content += `<a href="${res.mp3 || res.audio}" target="_blank" class="block w-full bg-emerald-600 text-center py-3 rounded-lg font-bold hover:bg-emerald-500 transition">UNDUH AUDIO (MP3)</a>`;
+                    }
+
+                    // Support Foto/Thumbnail
+                    if (res.thumbnail || res.image) {
+                        content += `<img src="${res.thumbnail || res.image}" class="mt-4 rounded-lg w-full border border-slate-700">`;
+                    }
+
+                    content += `</div>`;
+                    resultDiv.innerHTML = content;
+                    resultDiv.classList.remove('hidden');
+                } else {
+                    alert("Gagal: Link tidak didukung atau server sibuk.");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Terjadi kesalahan koneksi. Pastikan internet stabil.");
+            } finally {
+                loading.classList.add('hidden');
+                btnDl.disabled = false;
+            }
+        }
+    </script>
+
+    <footer class="mt-12 text-center text-slate-500 text-xs pb-10">
+        &copy; 2026 Ridzkey Downloader Project
+    </footer>
+</body>
+</html>
