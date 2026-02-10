@@ -1,40 +1,46 @@
 const express = require('express');
-const cors = require('cors');
 const axios = require('axios');
+const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+// Engine Scraping Sederhana (Mencari MP4 langsung dari source)
+async function getMediaUrl(targetUrl) {
+    // API Utama sebagai base scraper
+    const api = `https://api.deline.web.id/downloader/aio?url=${encodeURIComponent(targetUrl)}`;
+    const res = await axios.get(api, { timeout: 10000 });
+    const d = res.data.data || res.data;
+    return d.video || d.url || d.link || (d.media ? d.media[0].url : null);
+}
 
-// API Utama (AIO Support)
-const API_AIO = 'https://api.deline.web.id/downloader/aio?url=';
-
-app.get('/download', async (req, res) => {
+app.get('/proxy-download', async (req, res) => {
     const { url } = req.query;
-    if (!url) return res.status(400).json({ status: false, message: 'URL diperlukan' });
+    if (!url) return res.status(400).send("URL Needed");
 
     try {
-        const response = await axios.get(`${API_AIO}${encodeURIComponent(url)}`, { timeout: 8000 });
-        const result = response.data;
+        const mediaUrl = await getMediaUrl(url);
+        if (!mediaUrl) throw new Error("Link tidak ditemukan");
 
-        // Pastikan kita hantar data yang konsisten ke Frontend
-        if (result && result.status !== false) {
-            return res.json({
-                status: true,
-                platform: url.includes('instagram') ? 'Instagram' : url.includes('youtube') ? 'YouTube' : 'Media',
-                data: result.data || result // Mengendalikan pelbagai format
-            });
-        }
-        throw new Error("API Fail");
-    } catch (err) {
-        res.status(200).json({ 
-            status: false, 
-            message: "Server sedang sibuk atau URL tidak disokong. Sila cuba lagi." 
+        const response = await axios({
+            method: 'get',
+            url: mediaUrl,
+            responseType: 'stream'
         });
+
+        const totalLength = response.headers['content-length'];
+        
+        // Header agar browser mendownload file, bukan memutar
+        res.setHeader('Content-Disposition', 'attachment; filename="Ridzkey_Downloader.mp4"');
+        res.setHeader('Content-Type', 'video/mp4');
+        if (totalLength) res.setHeader('Content-Length', totalLength);
+
+        // Kirim stream data ke browser
+        response.data.pipe(res);
+
+    } catch (err) {
+        res.status(500).send("Scraping gagal: " + err.message);
     }
 });
 
-app.get('/', (req, res) => res.send('All Ridzkey Multi-Downloader Engine is Ready!'));
-app.listen(PORT);
+app.listen(3000);
