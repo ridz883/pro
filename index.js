@@ -1,72 +1,49 @@
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
+function renderResult(data) {
+    const container = document.getElementById('resultSection');
+    const content = document.getElementById('resultContent');
+    container.classList.remove('hidden');
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+    // Ambil data utama dari response API Deline
+    const result = data.data || data; 
+    let html = '';
+    
+    // 1. Tampilkan Thumbnail jika ada
+    const thumb = result.thumbnail || result.cover || result.image || (result.metadata ? result.metadata.thumbnail : null);
+    if(thumb) {
+        html += `<img src="${thumb}" class="w-full md:w-48 rounded-lg object-cover shadow-md mb-4 md:mb-0">`;
+    }
 
-const PORT = process.env.PORT || 3000;
+    html += `<div class="flex-1 w-full text-sm">`;
+    
+    // 2. Tampilkan Judul
+    const title = result.title || result.caption || 'Berhasil Menemukan File';
+    html += `<h4 class="font-bold text-lg mb-2 line-clamp-2">${title}</h4>`;
 
-// --- KONFIGURASI ENGINE ---
-const PRIMARY_API_URL = 'https://api.deline.web.id/downloader/aio?url=';
-const TIMEOUT_LIMIT = 3000; // 3 Detik
+    // 3. Tombol Download Otomatis (Mencari link MP4/MP3)
+    // Mencari di berbagai kemungkinan key: url, video, mp4, link
+    const downloadUrl = result.url || result.video || result.link || (result.metadata ? result.metadata.video : null);
+    
+    if (downloadUrl) {
+        html += createDownloadButton(downloadUrl, "Download Video (MP4)");
+    } 
 
-// --- 1. PRIMARY ENGINE (API) ---
-async function fetchFromPrimaryAPI(targetUrl) {
-    try {
-        const response = await axios.get(`${PRIMARY_API_URL}${targetUrl}`, {
-            timeout: TIMEOUT_LIMIT
+    // Jika ada audio/music
+    const audioUrl = result.audio || result.music || (result.metadata ? result.metadata.audio : null);
+    if (audioUrl) {
+        html += createDownloadButton(audioUrl, "Download Audio (MP3)");
+    }
+
+    // Backup: Jika API memberikan array media (seperti Instagram Carousel)
+    if (result.media && Array.isArray(result.media)) {
+        result.media.forEach((item, i) => {
+            html += createDownloadButton(item.url || item, `Download Media ${i+1}`);
         });
-        if (response.data && response.data.status !== false) {
-            return { source: 'API', data: response.data };
-        }
-        throw new Error("API Response Invalid");
-    } catch (error) {
-        throw error;
     }
-}
 
-// --- 2. SECONDARY ENGINE (SCRAPING FALLBACK) ---
-async function fetchFromScraperFallback(targetUrl) {
-    console.log(`[System] Switching to Scraping Mode for: ${targetUrl}`);
-    // Simulasi fallback sederhana
-    return { 
-        source: 'Fallback', 
-        status: true,
-        data: {
-            title: "Mode Fallback Aktif (API Utama Sibuk)",
-            url: targetUrl // Di real case ini hasil scraping
-        }
-    };
-}
-
-// --- MAIN ENDPOINT ---
-app.get('/download', async (req, res) => {
-    const { url } = req.query;
-    if (!url) return res.status(400).json({ error: 'URL diperlukan' });
-
-    try {
-        const result = await fetchFromPrimaryAPI(url);
-        return res.json(result.data);
-    } catch (apiError) {
-        try {
-            const scrapeResult = await fetchFromScraperFallback(url);
-            return res.json(scrapeResult);
-        } catch (scrapeError) {
-            return res.status(503).json({
-                status: false,
-                message: "Server sedang sibuk, silakan coba kembali."
-            });
-        }
+    if (!downloadUrl && !audioUrl && !result.media) {
+        html += `<p class="text-yellow-400">Gagal mengekstrak link download. Coba tempel ulang URL-nya.</p>`;
     }
-});
 
-// Endpoint default agar tidak 404 saat dibuka root url-nya
-app.get('/', (req, res) => {
-    res.send('All Ridzkey Downloader Engine is Running...');
-});
-
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+    html += `</div>`;
+    content.innerHTML = html;
+}
