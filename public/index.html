@@ -1,84 +1,77 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Ridzkey Pro</title>
+    <title>All Ridzkey Downloader</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-slate-900 text-white p-6">
-    <div class="max-w-md mx-auto bg-slate-800 p-6 rounded-3xl shadow-2xl border border-slate-700 mt-10">
-        <h1 class="text-xl font-bold text-center text-blue-400 mb-6">ALL RIDZKEY PRO</h1>
-        <input type="text" id="urlInput" placeholder="Tempel link video..." class="w-full p-4 bg-slate-900 border border-slate-700 rounded-2xl mb-4 outline-none">
-        <button onclick="downloadStart()" id="btn" class="w-full bg-blue-600 py-4 rounded-2xl font-bold active:scale-95 transition-all">UNDUH VIDEO</button>
-        
-        <div id="pContainer" class="hidden mt-6">
-            <div class="flex justify-between text-[10px] mb-1">
-                <span id="pStatus">Menyiapkan...</span>
-                <span id="pPercent">0%</span>
+<body class="bg-gray-900 text-white font-sans">
+
+    <nav class="p-4 bg-gray-800 shadow-xl sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-400">All Ridzkey <span class="text-white text-sm">Downloader</span></h1>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <button onclick="setPlatform('TikTok')" class="p-4 bg-gray-800 rounded-xl hover:bg-gray-700 transition border border-gray-700">
+                <i class="fab fa-tiktok text-3xl mb-2"></i>
+                <p class="text-sm">TikTok</p>
+            </button>
             </div>
-            <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
-                <div id="pBar" class="bg-blue-500 h-full w-0 transition-all"></div>
+
+        <div class="mt-10 max-w-2xl mx-auto bg-gray-800 p-6 rounded-2xl shadow-2xl">
+            <h2 id="platformTitle" class="text-xl mb-4 font-semibold text-center">Pilih Platform Diatas</h2>
+            <div class="flex gap-2">
+                <input type="text" id="urlInput" placeholder="Tempel URL di sini..." 
+                    class="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500">
+                <button onclick="handleDownload()" class="bg-blue-600 px-6 py-3 rounded-lg hover:bg-blue-500 font-bold">
+                    GET
+                </button>
             </div>
+            
+            <div id="loader" class="hidden mt-4 text-center">Processing...</div>
+            <div id="result" class="hidden mt-6 p-4 bg-gray-900 rounded-lg border border-dashed border-gray-600">
+                </div>
         </div>
     </div>
 
     <script>
-        async function downloadStart() {
-            const url = document.getElementById('urlInput').value;
-            const btn = document.getElementById('btn');
-            const pContainer = document.getElementById('pContainer');
-            const pBar = document.getElementById('pBar');
-            const pPercent = document.getElementById('pPercent');
-            const pStatus = document.getElementById('pStatus');
+        let currentPlatform = '';
+        function setPlatform(name) {
+            currentPlatform = name;
+            document.getElementById('platformTitle').innerText = 'Download ' + name;
+        }
 
-            if(!url) return;
-            btn.disabled = true;
-            pContainer.classList.remove('hidden');
+        async function handleDownload() {
+            const url = document.getElementById('urlInput').value;
+            if(!url) return alert('Masukkan URL!');
+            
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('result').classList.add('hidden');
 
             try {
-                // Step 1: Ambil Link Langsung
-                pStatus.innerText = "Menganalisis link...";
-                const res = await fetch(`/get-link?url=${encodeURIComponent(url)}`);
-                const data = await res.json();
-                if(!data.status) throw new Error(data.message);
-
-                // Step 2: Download di Sisi Client (Akurat 100%)
-                pStatus.innerText = "Mengunduh file...";
-                const mediaResponse = await fetch(data.downloadUrl);
-                const reader = mediaResponse.body.getReader();
-                const contentLength = +mediaResponse.headers.get('Content-Length');
+                const res = await fetch('/api/download', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ url })
+                });
+                const result = await res.json();
                 
-                let receivedLength = 0;
-                let chunks = [];
-                
-                while(true) {
-                    const {done, value} = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    receivedLength += value.length;
-                    
-                    if(contentLength) {
-                        const step = Math.round((receivedLength / contentLength) * 100);
-                        pBar.style.width = step + '%';
-                        pPercent.innerText = step + '%';
-                    }
+                if(result.success) {
+                    // Logic tampilkan hasil download (MP4/MP3)
+                    document.getElementById('result').innerHTML = `<a href="${result.data.url}" class="block text-center text-blue-400 underline">Klik untuk Download ${currentPlatform}</a>`;
+                    document.getElementById('result').classList.remove('hidden');
+                } else {
+                    alert(result.message);
                 }
-
-                // Step 3: Simpan File
-                pStatus.innerText = "Menyimpan ke HP...";
-                const blob = new Blob(chunks);
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `${data.title}.mp4`;
-                a.click();
-                
-                pStatus.innerText = "Selesai!";
             } catch (e) {
-                alert("Gagal: " + e.message);
-                pStatus.innerText = "Terjadi kesalahan.";
+                alert('Terjadi kesalahan sistem.');
             } finally {
-                btn.disabled = false;
+                document.getElementById('loader').classList.add('hidden');
             }
         }
     </script>
